@@ -79,6 +79,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Features\Resources\Bundle\BundleHandler.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Features\Resources\Bundle\TransactionBundleValidator.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Features\Resources\Bundle\TransactionExceptionHandler.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Features\Conformance\UsCoreCapabilityProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Features\Security\SecurityProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Modules\FeatureFlags\HtmlUi\HtmlUiFeatureModule.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Modules\FeatureFlags\XmlFormatter\XmlFormatterConfiguration.cs" />
