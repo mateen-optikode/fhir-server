@@ -83,6 +83,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Features\Conformance\IUsCoreProfilePackageDownloader.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Features\Conformance\IUsCoreProfileSeeder.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Features\Conformance\UsCoreProfilePackageDownloader.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Features\Conformance\UsCoreProfileSeedHostedService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Features\Conformance\UsCoreProfileSeeder.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Features\Conformance\UsCoreRequiredProfiles.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Features\Security\SecurityProvider.cs" />

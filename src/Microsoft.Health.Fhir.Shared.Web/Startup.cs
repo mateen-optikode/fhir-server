@@ -21,6 +21,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Primitives;
 using Microsoft.Health.Extensions.DependencyInjection;
 using Microsoft.Health.Fhir.Api.Features.BackgroundJobService;
+using Microsoft.Health.Fhir.Api.Features.Conformance;
 using Microsoft.Health.Fhir.Api.Modules;
 using Microsoft.Health.Fhir.Api.OpenIddict.Extensions;
 using Microsoft.Health.Fhir.Api.OpenIddict.FeatureProviders;
@@ -86,6 +87,8 @@ namespace Microsoft.Health.Fhir.Web
 
             AddDataStore(services, fhirServerBuilder, runtimeConfiguration);
 
+            AddUsCoreProfileSeedService(services);
+
             // Set task hosting and related background service
             if (bool.TryParse(Configuration["TaskHosting:Enabled"], out bool taskHostingsOn) && taskHostingsOn)
             {
@@ -140,6 +143,25 @@ namespace Microsoft.Health.Fhir.Web
             fhirServerBuilder.Services.AddSingleton<IFhirRuntimeConfiguration>(runtimeConfiguration);
 
             return runtimeConfiguration;
+        }
+
+        private void AddUsCoreProfileSeedService(IServiceCollection services)
+        {
+            services.Add<UsCoreProfileSeeder>()
+                .Singleton()
+                .AsSelf()
+                .AsService<IUsCoreProfileSeeder>();
+
+            services.Add<UsCoreProfilePackageDownloader>()
+                .Singleton()
+                .AsSelf()
+                .AsService<IUsCoreProfilePackageDownloader>();
+
+            services.RemoveServiceTypeExact<UsCoreProfileSeedHostedService, INotificationHandler<SearchParametersInitializedNotification>>()
+                .Add<UsCoreProfileSeedHostedService>()
+                .Singleton()
+                .AsSelf()
+                .AsImplementedInterfaces();
         }
 
         private void AddTaskHostingService(IServiceCollection services)
