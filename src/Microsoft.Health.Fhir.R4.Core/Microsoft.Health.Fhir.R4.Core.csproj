@@ -33,6 +33,10 @@
     <Folder Include="Features\Operations\Export\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Data\UsCore\6.1.0\**\*.json" />
+  </ItemGroup>
+
   <Import Project="..\Microsoft.Health.Fhir.Shared.Core\Microsoft.Health.Fhir.Shared.Core.projitems" Label="Shared" />
 
 </Project>
