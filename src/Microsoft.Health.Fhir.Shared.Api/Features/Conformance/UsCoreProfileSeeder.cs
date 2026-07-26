@@ -1,0 +1,269 @@
+// -------------------------------------------------------------------------------------------------
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License (MIT). See LICENSE in the repo root for license information.
+// -------------------------------------------------------------------------------------------------
+
+using System;
+using System.Collections.Generic;
+using System.Formats.Tar;
+using System.IO;
+using System.IO.Compression;
+using System.Linq;
+using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
+using EnsureThat;
+using Hl7.Fhir.Model;
+using Hl7.Fhir.Serialization;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Microsoft.Health.Extensions.DependencyInjection;
+using Microsoft.Health.Fhir.Core;
+using Microsoft.Health.Fhir.Core.Configs;
+using Microsoft.Health.Fhir.Core.Extensions;
+using Microsoft.Health.Fhir.Core.Features.Operations;
+using Microsoft.Health.Fhir.Core.Features.Persistence;
+using Microsoft.Health.Fhir.Core.Features.Validation;
+using Microsoft.Health.Fhir.Core.Models;
+using Task = System.Threading.Tasks.Task;
+
+namespace Microsoft.Health.Fhir.Api.Features.Conformance
+{
+    public sealed class UsCoreProfileSeeder : IUsCoreProfileSeeder
+    {
+        private readonly ImplementationGuidesConfiguration _configuration;
+        private readonly IScopeProvider<IFhirDataStore> _fhirDataStoreFactory;
+        private readonly IResourceWrapperFactory _resourceWrapperFactory;
+        private readonly FhirJsonParser _parser;
+        private readonly ISupportedProfilesStore _supportedProfilesStore;
+        private readonly IUsCoreProfilePackageDownloader _packageDownloader;
+        private readonly ILogger<UsCoreProfileSeeder> _logger;
+        private readonly Func<Assembly> _embeddedAssemblyProvider;
+
+        public UsCoreProfileSeeder(
+            IOptions<ImplementationGuidesConfiguration> configuration,
+            IScopeProvider<IFhirDataStore> fhirDataStoreFactory,
+            IResourceWrapperFactory resourceWrapperFactory,
+            FhirJsonParser parser,
+            ISupportedProfilesStore supportedProfilesStore,
+            IUsCoreProfilePackageDownloader packageDownloader,
+            ILogger<UsCoreProfileSeeder> logger)
+            : this(
+                configuration,
+                fhirDataStoreFactory,
+                resourceWrapperFactory,
+                parser,
+                supportedProfilesStore,
+                packageDownloader,
+                logger,
+                () => typeof(VersionSpecificModelInfoProvider).Assembly)
+        {
+        }
+
+        internal UsCoreProfileSeeder(
+            IOptions<ImplementationGuidesConfiguration> configuration,
+            IScopeProvider<IFhirDataStore> fhirDataStoreFactory,
+            IResourceWrapperFactory resourceWrapperFactory,
+            FhirJsonParser parser,
+            ISupportedProfilesStore supportedProfilesStore,
+            IUsCoreProfilePackageDownloader packageDownloader,
+            ILogger<UsCoreProfileSeeder> logger,
+            Func<Assembly> embeddedAssemblyProvider)
+        {
+            EnsureArg.IsNotNull(configuration?.Value, nameof(configuration));
+            _configuration = configuration.Value;
+            _fhirDataStoreFactory = EnsureArg.IsNotNull(fhirDataStoreFactory, nameof(fhirDataStoreFactory));
+            _resourceWrapperFactory = EnsureArg.IsNotNull(resourceWrapperFactory, nameof(resourceWrapperFactory));
+            _parser = EnsureArg.IsNotNull(parser, nameof(parser));
+            _supportedProfilesStore = EnsureArg.IsNotNull(supportedProfilesStore, nameof(supportedProfilesStore));
+            _packageDownloader = EnsureArg.IsNotNull(packageDownloader, nameof(packageDownloader));
+            _logger = EnsureArg.IsNotNull(logger, nameof(logger));
+            _embeddedAssemblyProvider = EnsureArg.IsNotNull(embeddedAssemblyProvider, nameof(embeddedAssemblyProvider));
+        }
+
+        public async Task SeedAsync(CancellationToken cancellationToken)
+        {
+            if (!_configuration.USCore.AutoSeedProfiles)
+            {
+                _logger.LogInformation("US Core profile auto-seed is disabled.");
+                return;
+            }
+
+            using IScoped<IFhirDataStore> scopedDataStore = _fhirDataStoreFactory.Invoke();
+            IFhirDataStore dataStore = scopedDataStore.Value;
+
+            var requiredProfileIds = GetRequiredProfileIds();
+            if (await AllRequiredProfilesPresentAsync(dataStore, requiredProfileIds, cancellationToken).ConfigureAwait(false))
+            {
+                _logger.LogInformation("All required US Core profiles are already present; skipping seed.");
+                return;
+            }
+
+            var upsertedCount = 0;
+            upsertedCount += await UpsertEmbeddedProfilesAsync(dataStore, requiredProfileIds, cancellationToken).ConfigureAwait(false);
+
+            if (_configuration.USCore.DownloadFullPackage)
+            {
+                upsertedCount += await UpsertDownloadedProfilesAsync(dataStore, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (upsertedCount > 0)
+            {
+                _supportedProfilesStore.Refresh();
+                _logger.LogInformation("Seeded {UpsertedCount} US Core StructureDefinition resources.", upsertedCount);
+            }
+        }
+
+        private static IReadOnlyList<string> GetRequiredProfileIds()
+        {
+            return UsCoreRequiredProfiles.CanonicalUrls
+                .Select(GetProfileIdFromCanonical)
+                .ToList();
+        }
+
+        private static string GetProfileIdFromCanonical(string canonicalUrl)
+        {
+            return canonicalUrl.Substring(canonicalUrl.LastIndexOf('/') + 1);
+        }
+
+        private static async Task<bool> AllRequiredProfilesPresentAsync(
+            IFhirDataStore dataStore,
+            IReadOnlyList<string> requiredProfileIds,
+            CancellationToken cancellationToken)
+        {
+            foreach (var profileId in requiredProfileIds)
+            {
+                var existing = await dataStore.GetAsync(new ResourceKey(KnownResourceTypes.StructureDefinition, profileId), cancellationToken).ConfigureAwait(false);
+                if (existing == null)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private async Task<int> UpsertEmbeddedProfilesAsync(
+            IFhirDataStore dataStore,
+            IReadOnlyCollection<string> requiredProfileIds,
+            CancellationToken cancellationToken)
+        {
+            var upsertedCount = 0;
+            foreach (var (id, json) in LoadEmbeddedStructureDefinitions(requiredProfileIds))
+            {
+                if (await UpsertStructureDefinitionIfMissingAsync(dataStore, id, json, cancellationToken).ConfigureAwait(false))
+                {
+                    upsertedCount++;
+                }
+            }
+
+            return upsertedCount;
+        }
+
+        private IEnumerable<(string Id, string Json)> LoadEmbeddedStructureDefinitions(IReadOnlyCollection<string> requiredProfileIds)
+        {
+            var requiredSet = new HashSet<string>(requiredProfileIds, StringComparer.Ordinal);
+            var assembly = _embeddedAssemblyProvider();
+
+            foreach (var resourceName in assembly.GetManifestResourceNames())
+            {
+                if (!resourceName.Contains("Data.UsCore", StringComparison.Ordinal) ||
+                    !resourceName.Contains("StructureDefinition-", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                // Extract id from resource name suffix: StructureDefinition-{id}.json
+                const string suffixPrefix = "StructureDefinition-";
+                var suffixIndex = resourceName.LastIndexOf(suffixPrefix, StringComparison.Ordinal);
+                if (suffixIndex < 0)
+                {
+                    continue;
+                }
+
+                var idWithExtension = resourceName.Substring(suffixIndex + suffixPrefix.Length);
+                if (!idWithExtension.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var id = idWithExtension.Substring(0, idWithExtension.Length - ".json".Length);
+                if (!requiredSet.Contains(id))
+                {
+                    continue;
+                }
+
+                using var stream = assembly.GetManifestResourceStream(resourceName);
+                if (stream == null)
+                {
+                    continue;
+                }
+
+                using var reader = new StreamReader(stream);
+                var json = reader.ReadToEnd();
+                if (!string.IsNullOrWhiteSpace(json))
+                {
+                    yield return (id, json);
+                }
+            }
+        }
+
+        private async Task<int> UpsertDownloadedProfilesAsync(IFhirDataStore dataStore, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var downloadedProfiles = await _packageDownloader.DownloadStructureDefinitionsAsync(cancellationToken).ConfigureAwait(false);
+                var upsertedCount = 0;
+
+                foreach (var (id, json) in downloadedProfiles)
+                {
+                    if (await UpsertStructureDefinitionIfMissingAsync(dataStore, id, json, cancellationToken).ConfigureAwait(false))
+                    {
+                        upsertedCount++;
+                    }
+                }
+
+                return upsertedCount;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Full US Core package download failed; embedded profiles were retained. Primary URL: {PrimaryUrl}. Fallback URL: {FallbackUrl}.",
+                    UsCoreRequiredProfiles.PackageDownloadUrl,
+                    UsCoreProfilePackageDownloader.FallbackPackageDownloadUrl);
+                return 0;
+            }
+        }
+
+        private async Task<bool> UpsertStructureDefinitionIfMissingAsync(
+            IFhirDataStore dataStore,
+            string profileId,
+            string json,
+            CancellationToken cancellationToken)
+        {
+            var existing = await dataStore.GetAsync(new ResourceKey(KnownResourceTypes.StructureDefinition, profileId), cancellationToken).ConfigureAwait(false);
+            if (existing != null)
+            {
+                return false;
+            }
+
+            var resource = _parser.Parse<Resource>(json);
+            var element = resource.ToResourceElement();
+            var wrapper = _resourceWrapperFactory.Create(element, deleted: false, keepMeta: true);
+
+            await dataStore.UpsertAsync(
+                new ResourceWrapperOperation(
+                    wrapper,
+                    allowCreate: true,
+                    keepHistory: true,
+                    weakETag: null,
+                    requireETagOnUpdate: false,
+                    keepVersion: false,
+                    bundleResourceContext: null),
+                cancellationToken).ConfigureAwait(false);
+
+            return true;
+        }
+    }
+}

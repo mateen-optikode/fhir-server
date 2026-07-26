@@ -45,6 +45,10 @@
     <Compile Include="$(MSBuildThisFileDirectory)Features\Context\FhirRequestContextAfterAuthenticationMiddlewareTests.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Features\Context\FhirRequestContextBeforeAuthenticationMiddlewareTests.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Features\Context\FhirRequestContextMiddlewareTests.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Features\Conformance\UsCoreCapabilityProviderTests.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Features\Conformance\UsCoreProfileSeedHostedServiceTests.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Features\Conformance\UsCoreProfileSeederTests.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Features\Conformance\UsCoreRequiredProfilesEmbeddedResourcesTests.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Features\Exceptions\BaseExceptionMiddlewareTests.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Features\Exceptions\ExceptionNotificationMiddlewareTests.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Features\Filters\Metrics\MetricEmitterAttributeTests.cs" />

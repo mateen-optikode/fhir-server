@@ -82,6 +82,13 @@
     <Compile Include="$(MSBuildThisFileDirectory)Features\Resources\Bundle\BundleHandler.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Features\Resources\Bundle\TransactionBundleValidator.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Features\Resources\Bundle\TransactionExceptionHandler.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Features\Conformance\UsCoreCapabilityProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Features\Conformance\IUsCoreProfilePackageDownloader.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Features\Conformance\IUsCoreProfileSeeder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Features\Conformance\UsCoreProfilePackageDownloader.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Features\Conformance\UsCoreProfileSeedHostedService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Features\Conformance\UsCoreProfileSeeder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Features\Conformance\UsCoreRequiredProfiles.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Features\Security\SecurityProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Modules\FeatureFlags\HtmlUi\HtmlUiFeatureModule.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Modules\FeatureFlags\XmlFormatter\XmlFormatterConfiguration.cs" />
