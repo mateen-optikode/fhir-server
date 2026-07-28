@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Primitives;
 using Microsoft.Health.Extensions.DependencyInjection;
@@ -145,7 +146,7 @@ namespace Microsoft.Health.Fhir.Web
             return runtimeConfiguration;
         }
 
-        private void AddUsCoreProfileSeedService(IServiceCollection services)
+        private static void AddUsCoreProfileSeedService(IServiceCollection services)
         {
             services.Add<UsCoreProfileSeeder>()
                 .Singleton()
@@ -157,11 +158,15 @@ namespace Microsoft.Health.Fhir.Web
                 .AsSelf()
                 .AsService<IUsCoreProfilePackageDownloader>();
 
+            // Same pattern as WatchdogsBackgroundService / SearchParameterCacheRefreshBackgroundService:
+            // Medino auto-registers notification handlers as Transient; remove that and register one singleton
+            // for both IHostedService and INotificationHandler so ExecuteAsync and HandleAsync share state.
             services.RemoveServiceTypeExact<UsCoreProfileSeedHostedService, INotificationHandler<SearchParametersInitializedNotification>>()
                 .Add<UsCoreProfileSeedHostedService>()
                 .Singleton()
                 .AsSelf()
-                .AsImplementedInterfaces();
+                .AsService<IHostedService>()
+                .AsService<INotificationHandler<SearchParametersInitializedNotification>>();
         }
 
         private void AddTaskHostingService(IServiceCollection services)

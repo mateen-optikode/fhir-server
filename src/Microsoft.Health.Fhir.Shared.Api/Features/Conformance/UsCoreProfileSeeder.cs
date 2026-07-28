@@ -5,9 +5,7 @@
 
 using System;
 using System.Collections.Generic;
-using System.Formats.Tar;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -15,15 +13,22 @@ using System.Threading.Tasks;
 using EnsureThat;
 using Hl7.Fhir.Model;
 using Hl7.Fhir.Serialization;
+using Medino;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Primitives;
+using Microsoft.Health.Core;
+using Microsoft.Health.Core.Extensions;
+using Microsoft.Health.Core.Features.Context;
 using Microsoft.Health.Extensions.DependencyInjection;
 using Microsoft.Health.Fhir.Core;
 using Microsoft.Health.Fhir.Core.Configs;
 using Microsoft.Health.Fhir.Core.Extensions;
+using Microsoft.Health.Fhir.Core.Features.Context;
 using Microsoft.Health.Fhir.Core.Features.Operations;
 using Microsoft.Health.Fhir.Core.Features.Persistence;
 using Microsoft.Health.Fhir.Core.Features.Validation;
+using Microsoft.Health.Fhir.Core.Messages.CapabilityStatement;
 using Microsoft.Health.Fhir.Core.Models;
 using Task = System.Threading.Tasks.Task;
 
@@ -37,6 +42,8 @@ namespace Microsoft.Health.Fhir.Api.Features.Conformance
         private readonly FhirJsonParser _parser;
         private readonly ISupportedProfilesStore _supportedProfilesStore;
         private readonly IUsCoreProfilePackageDownloader _packageDownloader;
+        private readonly RequestContextAccessor<IFhirRequestContext> _fhirRequestContextAccessor;
+        private readonly IMediator _mediator;
         private readonly ILogger<UsCoreProfileSeeder> _logger;
         private readonly Func<Assembly> _embeddedAssemblyProvider;
 
@@ -47,6 +54,8 @@ namespace Microsoft.Health.Fhir.Api.Features.Conformance
             FhirJsonParser parser,
             ISupportedProfilesStore supportedProfilesStore,
             IUsCoreProfilePackageDownloader packageDownloader,
+            RequestContextAccessor<IFhirRequestContext> fhirRequestContextAccessor,
+            IMediator mediator,
             ILogger<UsCoreProfileSeeder> logger)
             : this(
                 configuration,
@@ -55,6 +64,8 @@ namespace Microsoft.Health.Fhir.Api.Features.Conformance
                 parser,
                 supportedProfilesStore,
                 packageDownloader,
+                fhirRequestContextAccessor,
+                mediator,
                 logger,
                 () => typeof(VersionSpecificModelInfoProvider).Assembly)
         {
@@ -67,6 +78,8 @@ namespace Microsoft.Health.Fhir.Api.Features.Conformance
             FhirJsonParser parser,
             ISupportedProfilesStore supportedProfilesStore,
             IUsCoreProfilePackageDownloader packageDownloader,
+            RequestContextAccessor<IFhirRequestContext> fhirRequestContextAccessor,
+            IMediator mediator,
             ILogger<UsCoreProfileSeeder> logger,
             Func<Assembly> embeddedAssemblyProvider)
         {
@@ -77,17 +90,21 @@ namespace Microsoft.Health.Fhir.Api.Features.Conformance
             _parser = EnsureArg.IsNotNull(parser, nameof(parser));
             _supportedProfilesStore = EnsureArg.IsNotNull(supportedProfilesStore, nameof(supportedProfilesStore));
             _packageDownloader = EnsureArg.IsNotNull(packageDownloader, nameof(packageDownloader));
+            _fhirRequestContextAccessor = EnsureArg.IsNotNull(fhirRequestContextAccessor, nameof(fhirRequestContextAccessor));
+            _mediator = EnsureArg.IsNotNull(mediator, nameof(mediator));
             _logger = EnsureArg.IsNotNull(logger, nameof(logger));
             _embeddedAssemblyProvider = EnsureArg.IsNotNull(embeddedAssemblyProvider, nameof(embeddedAssemblyProvider));
         }
 
         public async Task SeedAsync(CancellationToken cancellationToken)
         {
-            if (!_configuration.USCore.AutoSeedProfiles)
+            if (!(_configuration.USCore?.AutoSeedProfiles ?? false))
             {
                 _logger.LogInformation("US Core profile auto-seed is disabled.");
                 return;
             }
+
+            _logger.LogInformation("US Core profile auto-seed starting.");
 
             using IScoped<IFhirDataStore> scopedDataStore = _fhirDataStoreFactory.Invoke();
             IFhirDataStore dataStore = scopedDataStore.Value;
@@ -99,22 +116,66 @@ namespace Microsoft.Health.Fhir.Api.Features.Conformance
                 return;
             }
 
-            var upsertedCount = 0;
-            upsertedCount += await UpsertEmbeddedProfilesAsync(dataStore, requiredProfileIds, cancellationToken).ConfigureAwait(false);
+            // ResourceWrapperFactory requires an IFhirRequestContext (Method/Uri). Background seeding has no HTTP request.
+            IFhirRequestContext existingContext = _fhirRequestContextAccessor.RequestContext;
+            _fhirRequestContextAccessor.RequestContext = CreateBackgroundRequestContext();
 
-            if (_configuration.USCore.DownloadFullPackage)
+            try
             {
-                upsertedCount += await UpsertDownloadedProfilesAsync(dataStore, cancellationToken).ConfigureAwait(false);
+                var embeddedProfiles = LoadEmbeddedStructureDefinitions(requiredProfileIds).ToList();
+                _logger.LogInformation(
+                    "Loaded {EmbeddedCount} embedded US Core StructureDefinition resources (required={RequiredCount}).",
+                    embeddedProfiles.Count,
+                    requiredProfileIds.Count);
+
+                if (embeddedProfiles.Count == 0)
+                {
+                    _logger.LogError(
+                        "No embedded US Core StructureDefinitions found in assembly {AssemblyName}. Seed cannot proceed.",
+                        _embeddedAssemblyProvider().GetName().Name);
+                }
+
+                var upsertedCount = 0;
+                upsertedCount += await UpsertProfilesAsync(dataStore, embeddedProfiles, cancellationToken).ConfigureAwait(false);
+
+                if (_configuration.USCore.DownloadFullPackage)
+                {
+                    upsertedCount += await UpsertDownloadedProfilesAsync(dataStore, cancellationToken).ConfigureAwait(false);
+                }
+
+                if (upsertedCount > 0)
+                {
+                    _supportedProfilesStore.Refresh();
+                    await _mediator.PublishAsync(new RebuildCapabilityStatement(RebuildPart.Profiles), cancellationToken).ConfigureAwait(false);
+                    _logger.LogInformation("Seeded {UpsertedCount} US Core StructureDefinition resources and requested CapabilityStatement rebuild.", upsertedCount);
+                }
+                else
+                {
+                    _logger.LogWarning("US Core profile auto-seed completed with 0 upserts.");
+                }
             }
-
-            if (upsertedCount > 0)
+            finally
             {
-                _supportedProfilesStore.Refresh();
-                _logger.LogInformation("Seeded {UpsertedCount} US Core StructureDefinition resources.", upsertedCount);
+                _fhirRequestContextAccessor.RequestContext = existingContext;
             }
         }
 
-        private static IReadOnlyList<string> GetRequiredProfileIds()
+        private static FhirRequestContext CreateBackgroundRequestContext()
+        {
+            return new FhirRequestContext(
+                method: "PUT",
+                uriString: "https://localhost/StructureDefinition",
+                baseUriString: "https://localhost/",
+                correlationId: Guid.NewGuid().ToString("N"),
+                requestHeaders: new Dictionary<string, StringValues>(),
+                responseHeaders: new Dictionary<string, StringValues>())
+            {
+                IsBackgroundTask = true,
+                ResourceType = KnownResourceTypes.StructureDefinition,
+            };
+        }
+
+        private static List<string> GetRequiredProfileIds()
         {
             return UsCoreRequiredProfiles.CanonicalUrls
                 .Select(GetProfileIdFromCanonical)
@@ -143,17 +204,25 @@ namespace Microsoft.Health.Fhir.Api.Features.Conformance
             return true;
         }
 
-        private async Task<int> UpsertEmbeddedProfilesAsync(
+        private async Task<int> UpsertProfilesAsync(
             IFhirDataStore dataStore,
-            IReadOnlyCollection<string> requiredProfileIds,
+            IReadOnlyList<(string Id, string Json)> profiles,
             CancellationToken cancellationToken)
         {
             var upsertedCount = 0;
-            foreach (var (id, json) in LoadEmbeddedStructureDefinitions(requiredProfileIds))
+            foreach (var (id, json) in profiles)
             {
-                if (await UpsertStructureDefinitionIfMissingAsync(dataStore, id, json, cancellationToken).ConfigureAwait(false))
+                try
                 {
-                    upsertedCount++;
+                    if (await UpsertStructureDefinitionIfMissingAsync(dataStore, id, json, cancellationToken).ConfigureAwait(false))
+                    {
+                        upsertedCount++;
+                        _logger.LogInformation("Upserted US Core StructureDefinition/{ProfileId}.", id);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to upsert US Core StructureDefinition/{ProfileId}.", id);
                 }
             }
 
@@ -213,17 +282,8 @@ namespace Microsoft.Health.Fhir.Api.Features.Conformance
             try
             {
                 var downloadedProfiles = await _packageDownloader.DownloadStructureDefinitionsAsync(cancellationToken).ConfigureAwait(false);
-                var upsertedCount = 0;
-
-                foreach (var (id, json) in downloadedProfiles)
-                {
-                    if (await UpsertStructureDefinitionIfMissingAsync(dataStore, id, json, cancellationToken).ConfigureAwait(false))
-                    {
-                        upsertedCount++;
-                    }
-                }
-
-                return upsertedCount;
+                _logger.LogInformation("Downloaded {DownloadedCount} StructureDefinitions from US Core package.", downloadedProfiles.Count);
+                return await UpsertProfilesAsync(dataStore, downloadedProfiles, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -248,7 +308,15 @@ namespace Microsoft.Health.Fhir.Api.Features.Conformance
                 return false;
             }
 
-            var resource = _parser.Parse<Resource>(json);
+            var resource = (Resource)await _parser.ParseAsync(json, typeof(Resource)).ConfigureAwait(false);
+            resource.Id = profileId;
+
+            // SqlServerFhirDataStore.SyncVersionIdAndLastUpdatedInMeta requires lastUpdated in raw JSON.
+            // Embedded IG profiles ship without meta; mirror ImportResourceParser for creates.
+            resource.Meta ??= new Meta();
+            resource.Meta.LastUpdated = Clock.UtcNow.UtcDateTime.TruncateToMillisecond();
+            resource.Meta.VersionId = "1";
+
             var element = resource.ToResourceElement();
             var wrapper = _resourceWrapperFactory.Create(element, deleted: false, keepMeta: true);
 

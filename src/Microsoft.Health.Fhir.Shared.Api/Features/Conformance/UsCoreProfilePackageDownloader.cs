@@ -78,7 +78,7 @@ namespace Microsoft.Health.Fhir.Api.Features.Conformance
                 try
                 {
                     _logger.LogInformation("Downloading US Core package from {PackageUrl}", url);
-                    using var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                    using var response = await httpClient.GetAsync(new Uri(url), HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
                     response.EnsureSuccessStatusCode();
 
                     await using var fileStream = File.Create(destinationPath);
@@ -97,7 +97,7 @@ namespace Microsoft.Health.Fhir.Api.Features.Conformance
                 lastException);
         }
 
-        private static IReadOnlyList<(string Id, string Json)> ExtractStructureDefinitions(string packageFilePath)
+        private static List<(string Id, string Json)> ExtractStructureDefinitions(string packageFilePath)
         {
             var results = new List<(string Id, string Json)>();
 

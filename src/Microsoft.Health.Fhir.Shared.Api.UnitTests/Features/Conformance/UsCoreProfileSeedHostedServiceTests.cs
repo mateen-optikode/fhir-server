@@ -52,7 +52,7 @@ namespace Microsoft.Health.Fhir.Api.UnitTests.Features.Conformance
             var service = CreateService();
 
             var executeTask = service.StartAsync(cancellationTokenSource.Token);
-            await service.Handle(new SearchParametersInitializedNotification(), CancellationToken.None);
+            await service.HandleAsync(new SearchParametersInitializedNotification(), CancellationToken.None);
             await Task.Delay(1500, cancellationTokenSource.Token);
 
             await _seeder.Received(1).SeedAsync(Arg.Any<CancellationToken>());
@@ -71,7 +71,7 @@ namespace Microsoft.Health.Fhir.Api.UnitTests.Features.Conformance
             var service = CreateService(logger);
 
             var executeTask = service.StartAsync(cancellationTokenSource.Token);
-            await service.Handle(new SearchParametersInitializedNotification(), CancellationToken.None);
+            await service.HandleAsync(new SearchParametersInitializedNotification(), CancellationToken.None);
             await Task.Delay(1500, cancellationTokenSource.Token);
 
             await executeTask;

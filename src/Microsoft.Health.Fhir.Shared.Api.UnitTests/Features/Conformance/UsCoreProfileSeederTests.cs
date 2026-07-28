@@ -10,17 +10,21 @@ using System.Threading;
 using System.Threading.Tasks;
 using Hl7.Fhir.Model;
 using Hl7.Fhir.Serialization;
+using Medino;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Health.Core.Features.Context;
 using Microsoft.Health.Extensions.DependencyInjection;
 using Microsoft.Health.Fhir.Api.Features.Conformance;
 using Microsoft.Health.Fhir.Core;
 using Microsoft.Health.Fhir.Core.Configs;
 using Microsoft.Health.Fhir.Core.Extensions;
+using Microsoft.Health.Fhir.Core.Features.Context;
 using Microsoft.Health.Fhir.Core.Features.Operations;
 using Microsoft.Health.Fhir.Core.Features.Persistence;
 using Microsoft.Health.Fhir.Core.Features.Validation;
+using Microsoft.Health.Fhir.Core.Messages.CapabilityStatement;
 using Microsoft.Health.Fhir.Core.Models;
 using Microsoft.Health.Fhir.Tests.Common;
 using Microsoft.Health.Test.Utilities;
@@ -40,6 +44,8 @@ namespace Microsoft.Health.Fhir.Api.UnitTests.Features.Conformance
         private readonly IResourceWrapperFactory _resourceWrapperFactory = Substitute.For<IResourceWrapperFactory>();
         private readonly ISupportedProfilesStore _supportedProfilesStore = Substitute.For<ISupportedProfilesStore>();
         private readonly IUsCoreProfilePackageDownloader _packageDownloader = Substitute.For<IUsCoreProfilePackageDownloader>();
+        private readonly RequestContextAccessor<IFhirRequestContext> _fhirRequestContextAccessor = Substitute.For<RequestContextAccessor<IFhirRequestContext>>();
+        private readonly IMediator _mediator = Substitute.For<IMediator>();
         private readonly FhirJsonParser _parser = new FhirJsonParser();
         private readonly ILogger<UsCoreProfileSeeder> _logger = NullLogger<UsCoreProfileSeeder>.Instance;
 
@@ -89,6 +95,9 @@ namespace Microsoft.Health.Fhir.Api.UnitTests.Features.Conformance
                 Arg.Is<ResourceWrapperOperation>(op => op.Wrapper != null),
                 Arg.Any<CancellationToken>());
             _supportedProfilesStore.Received(1).Refresh();
+            await _mediator.Received(1).PublishAsync(
+                Arg.Is<RebuildCapabilityStatement>(n => n.Part == RebuildPart.Profiles),
+                Arg.Any<CancellationToken>());
         }
 
         [Fact]
@@ -138,6 +147,8 @@ namespace Microsoft.Health.Fhir.Api.UnitTests.Features.Conformance
                 _parser,
                 _supportedProfilesStore,
                 _packageDownloader,
+                _fhirRequestContextAccessor,
+                _mediator,
                 logger ?? _logger,
                 () => typeof(VersionSpecificModelInfoProvider).Assembly);
         }

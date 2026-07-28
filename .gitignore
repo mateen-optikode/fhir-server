@@ -311,3 +311,4 @@ __*
 
 # For ignroing .local files from MultiInstanceRunner
 .local/
+.worktrees/

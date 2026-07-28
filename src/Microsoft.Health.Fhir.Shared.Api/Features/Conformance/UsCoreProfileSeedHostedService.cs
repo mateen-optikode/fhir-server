@@ -7,7 +7,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using EnsureThat;
-using MediatR;
+using Medino;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Health.Fhir.Core.Messages.Search;
@@ -48,6 +48,7 @@ namespace Microsoft.Health.Fhir.Api.Features.Conformance
                     return;
                 }
 
+                _logger.LogInformation("UsCoreProfileSeedHostedService storage ready; invoking seeder.");
                 await _seeder.SeedAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -64,7 +65,7 @@ namespace Microsoft.Health.Fhir.Api.Features.Conformance
             }
         }
 
-        public Task Handle(SearchParametersInitializedNotification notification, CancellationToken cancellationToken)
+        public Task HandleAsync(SearchParametersInitializedNotification notification, CancellationToken cancellationToken)
         {
             _storageReady = true;
             return Task.CompletedTask;
