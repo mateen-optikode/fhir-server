@@ -107,6 +107,7 @@ namespace Microsoft.Health.Fhir.Core.Features.Conformance
                     {
                         "client_secret_basic",
                         "client_secret_jwt",
+                        "private_key_jwt",
                         "none",
                     };
 
