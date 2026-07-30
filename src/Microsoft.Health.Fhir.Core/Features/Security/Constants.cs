@@ -28,6 +28,9 @@ namespace Microsoft.Health.Fhir.Core.Features.Security
         public static readonly string[] SmartCapabilityLaunches = new[]
         {
             "launch-standalone",
+            "launch-ehr",
+            "context-ehr-patient",
+            "context-ehr-encounter",
         };
 
         public static readonly string[] SmartCapabilityClients = new[]

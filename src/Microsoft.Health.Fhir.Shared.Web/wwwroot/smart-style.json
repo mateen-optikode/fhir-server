@@ -1,0 +1,13 @@
+{
+  "color_background": "#FFFFFF",
+  "color_error": "#9e2d2d",
+  "color_highlight": "#0B6E4F",
+  "color_modal_backdrop": "#000000",
+  "color_success": "#498e49",
+  "color_text": "#303030",
+  "dim_border_radius": "6px",
+  "dim_font_size": "14px",
+  "dim_spacing_size": "20px",
+  "font_family_body": "Segoe UI, Helvetica, Arial, sans-serif",
+  "font_family_heading": "Segoe UI, Helvetica, Arial, sans-serif"
+}
