@@ -112,7 +112,8 @@ namespace Microsoft.Extensions.DependencyInjection
                 services.Configure<ForwardedHeadersOptions>(options =>
                 {
                     // Default value for options.ForwardedHeaders is ForwardedHeaders.None.
-                    options.ForwardedHeaders |= ForwardedHeaders.XForwardedHost | ForwardedHeaders.XForwardedPrefix;
+                    // Include Proto so Bundle next/self links use the public https scheme when TLS is terminated upstream.
+                    options.ForwardedHeaders |= ForwardedHeaders.XForwardedHost | ForwardedHeaders.XForwardedPrefix | ForwardedHeaders.XForwardedProto;
 
                     // Only loopback proxies are allowed by default.
                     // Clear that restriction because forwarders are enabled by explicit

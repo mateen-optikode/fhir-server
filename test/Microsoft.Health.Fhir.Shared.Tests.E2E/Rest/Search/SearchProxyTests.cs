@@ -39,6 +39,7 @@ namespace Microsoft.Health.Fhir.Tests.E2E.Rest.Search
     {
         private const string XForwardedHost = "X-Forwarded-Host";
         private const string XForwardedPrefix = "X-Forwarded-Prefix";
+        private const string XForwardedProto = "X-Forwarded-Proto";
 
         // Configurable via environment variables for different deployment environments
         private static readonly string Host = EnvironmentVariables.GetEnvironmentVariable(
@@ -59,6 +60,7 @@ namespace Microsoft.Health.Fhir.Tests.E2E.Rest.Search
             _proxyClient = fixture.TestFhirServer.GetTestFhirClient(Client.Format, TestApplications.ReadOnlyUser, user: null, reusable: false);
             _proxyClient.HttpClient.DefaultRequestHeaders.Add(XForwardedHost, Host);
             _proxyClient.HttpClient.DefaultRequestHeaders.Add(XForwardedPrefix, Prefix);
+            _proxyClient.HttpClient.DefaultRequestHeaders.Add(XForwardedProto, "https");
         }
 
         [RetryFact]
@@ -133,6 +135,7 @@ namespace Microsoft.Health.Fhir.Tests.E2E.Rest.Search
         private static void AssertBundleUri(string expectedPath, Uri actual)
         {
             UriBuilder builder = new UriBuilder(actual);
+            Assert.Equal("https", builder.Scheme);
             Assert.Equal(Host, builder.Host);
             Assert.Equal(Prefix + expectedPath, builder.Path);
         }
