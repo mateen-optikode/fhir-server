@@ -29,6 +29,7 @@ namespace Microsoft.Health.Fhir.Core.Features.Security
         {
             "launch-standalone",
             "launch-ehr",
+            "context-standalone-patient",
             "context-ehr-patient",
             "context-ehr-encounter",
             "context-banner",
