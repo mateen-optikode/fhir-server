@@ -16,6 +16,7 @@ using Microsoft.Health.Fhir.Core.Features.Conformance;
 using Microsoft.Health.Fhir.Core.Features.Conformance.Models;
 using Microsoft.Health.Fhir.Core.Features.Operations;
 using Microsoft.Health.Fhir.Core.Features.Routing;
+using Microsoft.Health.Fhir.Core.Models;
 using Microsoft.Health.Fhir.Core.Registration;
 using Microsoft.Health.Fhir.Tests.Common;
 using Microsoft.Health.Test.Utilities;
@@ -155,6 +156,33 @@ namespace Microsoft.Health.Fhir.Api.UnitTests.Features.Operations
                                 && string.Equals(OperationDefinitionUrl, y.Definition?.Reference, StringComparison.OrdinalIgnoreCase);
                         });
                 });
+        }
+
+        [Fact]
+        public void GivenProvider_WhenAddingDetails_ThenGroupResourceExportOperationShouldBeAdded()
+        {
+            var provider = new OperationsCapabilityProvider(
+                _operationsOptions,
+                _featureOptions,
+                _coreFeatureOptions,
+                _implementationGuidesOptions,
+                _watchdogOptions,
+                _urlResolver,
+                _fhirRuntimeConfiguration);
+            var restComponent = new ListedRestComponent()
+            {
+                Mode = ListedCapabilityStatement.ServerMode,
+            };
+
+            var capabilityStatement = new ListedCapabilityStatement();
+            capabilityStatement.Rest.Add(restComponent);
+
+            provider.AddExportDetails(capabilityStatement);
+
+            var groupResource = Assert.Single(restComponent.Resource, resource => resource.Type == KnownResourceTypes.Group);
+            var exportOperation = Assert.Single(groupResource.Operation);
+            Assert.Equal(OperationsConstants.Export, exportOperation.Name);
+            Assert.Equal(OperationDefinitionUrl, exportOperation.Definition?.Reference);
         }
 
         [Theory]

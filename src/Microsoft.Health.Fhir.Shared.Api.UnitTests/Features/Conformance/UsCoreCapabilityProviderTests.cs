@@ -45,6 +45,7 @@ namespace Microsoft.Health.Fhir.Api.UnitTests.Features.Conformance
             Assert.True(captured.AdditionalData.TryGetValue("instantiates", out var token));
             var arr = Assert.IsType<JArray>(token);
             Assert.Contains(arr, t => t.Type == JTokenType.String && (string)t == UsCoreServerCapabilityStatement);
+            Assert.Contains(arr, t => t.Type == JTokenType.String && (string)t == UsCoreCapabilityProvider.BulkDataCapabilityStatementUrl);
         }
     }
 }

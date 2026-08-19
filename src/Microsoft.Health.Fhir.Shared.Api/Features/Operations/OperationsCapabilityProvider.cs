@@ -4,6 +4,7 @@
 // -------------------------------------------------------------------------------------------------
 
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EnsureThat;
@@ -135,6 +136,8 @@ namespace Microsoft.Health.Fhir.Api.Features.Operations
             GetAndAddOperationDefinitionUriToCapabilityStatement(capabilityStatement, OperationsConstants.Export);
             GetAndAddOperationDefinitionUriToCapabilityStatement(capabilityStatement, OperationsConstants.PatientExport);
             GetAndAddOperationDefinitionUriToCapabilityStatement(capabilityStatement, OperationsConstants.GroupExport);
+            AddResourceExportOperation(capabilityStatement, KnownResourceTypes.Group, OperationsConstants.GroupExport);
+            AddResourceExportOperation(capabilityStatement, KnownResourceTypes.Patient, OperationsConstants.PatientExport);
         }
 
         public static void AddPatientEverythingDetails(ListedCapabilityStatement capabilityStatement)
@@ -158,6 +161,42 @@ namespace Microsoft.Health.Fhir.Api.Features.Operations
                 Definition = new ReferenceComponent
                 {
                     Reference = operationDefinitionUri?.ToString(),
+                },
+            });
+        }
+
+        private void AddResourceExportOperation(ListedCapabilityStatement capabilityStatement, string resourceType, string operationType)
+        {
+            Uri operationDefinitionUri = _urlResolver.ResolveOperationDefinitionUrl(operationType);
+            if (operationDefinitionUri == null)
+            {
+                return;
+            }
+
+            ListedRestComponent serverRest = capabilityStatement.Rest.Server();
+            ListedResourceComponent resourceComponent = serverRest.Resource
+                .SingleOrDefault(resource => string.Equals(resource.Type, resourceType, StringComparison.Ordinal));
+
+            if (resourceComponent == null)
+            {
+                resourceComponent = new ListedResourceComponent
+                {
+                    Type = resourceType,
+                };
+                serverRest.Resource.Add(resourceComponent);
+            }
+
+            if (resourceComponent.Operation.Any(operation => string.Equals(operation.Name, OperationsConstants.Export, StringComparison.OrdinalIgnoreCase)))
+            {
+                return;
+            }
+
+            resourceComponent.Operation.Add(new OperationComponent
+            {
+                Name = OperationsConstants.Export,
+                Definition = new ReferenceComponent
+                {
+                    Reference = operationDefinitionUri.ToString(),
                 },
             });
         }
