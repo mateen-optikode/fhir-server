@@ -311,24 +311,11 @@ namespace Microsoft.Health.Fhir.Web
                         options.RolesClaim = securityConfiguration.Authorization.RolesClaim;
                     });
 
-                authBuilder.AddPolicyScheme(smartBearerScheme, "SMART Bearer (JWT or introspection)", options =>
+                authBuilder.AddPolicyScheme(smartBearerScheme, "SMART Bearer (introspection with revocation)", options =>
                 {
-                    options.ForwardDefaultSelector = context =>
-                    {
-                        string header = context.Request.Headers.Authorization.ToString();
-                        if (header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-                        {
-                            string token = header["Bearer ".Length..].Trim();
-
-                            // Compact JWTs have exactly two '.' separators.
-                            if (token.Count(c => c == '.') == 2)
-                            {
-                                return JwtBearerDefaults.AuthenticationScheme;
-                            }
-                        }
-
-                        return OidcIntrospectionHandler.SchemeName;
-                    };
+                    // Always introspect so revoked access tokens fail immediately (Inferno 9.3),
+                    // even when the token is a self-contained JWT.
+                    options.ForwardDefaultSelector = _ => OidcIntrospectionHandler.SchemeName;
                 });
             }
         }
