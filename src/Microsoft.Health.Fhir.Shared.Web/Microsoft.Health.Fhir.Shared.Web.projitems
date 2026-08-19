@@ -12,6 +12,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)CloudRoleNameTelemetryInitializer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)AzureMonitorOpenTelemetryLogEnricher.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)DummyMeterFactory.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)OidcIntrospectionHandler.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)OidcIntrospectionOptions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Program.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)PrometheusMetricsConfig.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)PrometheusMetricsApplicationBuilderExtensions.cs" />

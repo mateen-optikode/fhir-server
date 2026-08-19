@@ -269,14 +269,26 @@ namespace Microsoft.Health.Fhir.Web
 
         private static void AddAuthenticationLibrary(IServiceCollection services, SecurityConfiguration securityConfiguration)
         {
-            // Note: This method is still used to configure JWT Bearer for non–OpenIddict tokens.
-            services.AddAuthentication(options =>
+            const string smartBearerScheme = "SmartBearer";
+
+            string authority = securityConfiguration.Authentication.Authority?.TrimEnd('/');
+            string introspectionEndpoint = string.IsNullOrWhiteSpace(securityConfiguration.Authentication.IntrospectionEndpoint)
+                ? $"{authority}/connect/introspect"
+                : securityConfiguration.Authentication.IntrospectionEndpoint;
+
+            bool useIntrospection = securityConfiguration.Authentication.UseIntrospection;
+
+            services.AddHttpClient(OidcIntrospectionHandler.HttpClientName);
+
+            var authBuilder = services.AddAuthentication(options =>
             {
-                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-                options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
-            })
-            .AddJwtBearer(options =>
+                // Prefer a selector scheme so JWT (legacy) and opaque reference tokens both work.
+                options.DefaultAuthenticateScheme = useIntrospection ? smartBearerScheme : JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = useIntrospection ? smartBearerScheme : JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultScheme = useIntrospection ? smartBearerScheme : JwtBearerDefaults.AuthenticationScheme;
+            });
+
+            authBuilder.AddJwtBearer(options =>
             {
                 options.Authority = securityConfiguration.Authentication.Authority;
                 options.Audience = securityConfiguration.Authentication.Audience;
@@ -285,6 +297,40 @@ namespace Microsoft.Health.Fhir.Web
                 options.RequireHttpsMetadata = true;
                 options.Challenge = $"Bearer authorization_uri=\"{securityConfiguration.Authentication.Authority}\", resource_id=\"{securityConfiguration.Authentication.Audience}\", realm=\"{securityConfiguration.Authentication.Audience}\"";
             });
+
+            if (useIntrospection)
+            {
+                authBuilder.AddScheme<OidcIntrospectionOptions, OidcIntrospectionHandler>(
+                    OidcIntrospectionHandler.SchemeName,
+                    options =>
+                    {
+                        options.IntrospectionEndpoint = introspectionEndpoint;
+                        options.ClientId = securityConfiguration.Authentication.IntrospectionClientId;
+                        options.ClientSecret = securityConfiguration.Authentication.IntrospectionClientSecret;
+                        options.Audience = securityConfiguration.Authentication.Audience;
+                        options.RolesClaim = securityConfiguration.Authorization.RolesClaim;
+                    });
+
+                authBuilder.AddPolicyScheme(smartBearerScheme, "SMART Bearer (JWT or introspection)", options =>
+                {
+                    options.ForwardDefaultSelector = context =>
+                    {
+                        string header = context.Request.Headers.Authorization.ToString();
+                        if (header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                        {
+                            string token = header["Bearer ".Length..].Trim();
+
+                            // Compact JWTs have exactly two '.' separators.
+                            if (token.Count(c => c == '.') == 2)
+                            {
+                                return JwtBearerDefaults.AuthenticationScheme;
+                            }
+                        }
+
+                        return OidcIntrospectionHandler.SchemeName;
+                    };
+                });
+            }
         }
 
         /// <summary>

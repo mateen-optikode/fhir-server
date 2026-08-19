@@ -31,6 +31,8 @@ namespace Microsoft.Health.Fhir.Core.Features.Security
             "launch-ehr",
             "context-ehr-patient",
             "context-ehr-encounter",
+            "context-banner",
+            "context-style",
         };
 
         public static readonly string[] SmartCapabilityClients = new[]
@@ -45,6 +47,7 @@ namespace Microsoft.Health.Fhir.Core.Features.Security
             "permission-patient",
             "permission-user",
             "permission-offline",
+            "permission-v1",
             "permission-v2",
         };
 
