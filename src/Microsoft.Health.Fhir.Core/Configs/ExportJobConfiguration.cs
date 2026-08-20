@@ -32,6 +32,23 @@ namespace Microsoft.Health.Fhir.Core.Configs
             Justification = "Set from an environment variable.")]
         public string StorageAccountUri { get; set; } = string.Empty;
 
+        /// <summary>
+        /// Optional public base URI used in export output URLs. Write traffic still uses
+        /// <see cref="StorageAccountConnection"/> (for example Azurite on 127.0.0.1).
+        /// Example: https://fhirexport.optikode.com
+        /// </summary>
+        [System.Diagnostics.CodeAnalysis.SuppressMessage(
+            "Usage",
+            "CA1056:Uri properties should not be strings",
+            Justification = "Set from an environment variable.")]
+        public string StorageAccountPublicUri { get; set; } = string.Empty;
+
+        /// <summary>
+        /// When true, newly created export containers allow anonymous blob reads so Inferno
+        /// can download NDJSON when the status payload sets requiresAccessToken to false.
+        /// </summary>
+        public bool EnablePublicBlobAccess { get; set; }
+
         public ushort MaximumNumberOfConcurrentJobsAllowedPerInstance { get; set; } = 1;
 
         public TimeSpan JobHeartbeatTimeoutThreshold { get; set; } = TimeSpan.FromMinutes(10);

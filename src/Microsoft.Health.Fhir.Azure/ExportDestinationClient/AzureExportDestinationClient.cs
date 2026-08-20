@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Azure;
 using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
 using Azure.Storage.Blobs.Specialized;
 using EnsureThat;
 using Microsoft.Extensions.Logging;
@@ -75,7 +76,10 @@ namespace Microsoft.Health.Fhir.Azure.ExportDestinationClient
 
             try
             {
-                await _blobContainer.CreateIfNotExistsAsync(cancellationToken: cancellationToken);
+                PublicAccessType publicAccess = _exportJobConfiguration.EnablePublicBlobAccess
+                    ? PublicAccessType.Blob
+                    : PublicAccessType.None;
+                await _blobContainer.CreateIfNotExistsAsync(publicAccess, cancellationToken: cancellationToken);
             }
             catch (RequestFailedException se)
             {
@@ -192,7 +196,26 @@ namespace Microsoft.Health.Fhir.Azure.ExportDestinationClient
             blobWriter.StreamWriter.Flush();
             blobWriter.StreamWriter.Close();
 
-            return blobWriter.BlobUri;
+            return RewritePublicBlobUri(blobWriter.BlobUri);
+        }
+
+        private Uri RewritePublicBlobUri(Uri blobUri)
+        {
+            if (blobUri == null ||
+                string.IsNullOrWhiteSpace(_exportJobConfiguration.StorageAccountPublicUri) ||
+                !Uri.TryCreate(_exportJobConfiguration.StorageAccountPublicUri, UriKind.Absolute, out Uri publicBase))
+            {
+                return blobUri;
+            }
+
+            var builder = new UriBuilder(blobUri)
+            {
+                Scheme = publicBase.Scheme,
+                Host = publicBase.Host,
+                Port = publicBase.IsDefaultPort ? -1 : publicBase.Port,
+            };
+
+            return builder.Uri;
         }
 
         private void CheckIfClientIsConnected()
