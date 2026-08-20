@@ -84,6 +84,11 @@ namespace Microsoft.Health.Fhir.Core.Features.Operations.Export
             else if (outcome.JobRecord.Status == OperationStatus.Failed || outcome.JobRecord.Status == OperationStatus.Canceled)
             {
                 string failureReason = outcome.JobRecord.FailureDetails != null ? outcome.JobRecord.FailureDetails.FailureReason : Core.Resources.UnknownError;
+                if (!string.IsNullOrWhiteSpace(outcome.JobRecord.FailureDetails?.FailureDetails))
+                {
+                    failureReason = $"{failureReason} {outcome.JobRecord.FailureDetails.FailureDetails}";
+                }
+
                 HttpStatusCode failureStatusCode = outcome.JobRecord.FailureDetails != null ? outcome.JobRecord.FailureDetails.FailureStatusCode : HttpStatusCode.InternalServerError;
 
                 throw new OperationFailedException(

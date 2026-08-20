@@ -6,6 +6,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -87,22 +88,24 @@ namespace Microsoft.Health.Fhir.Azure.ExportDestinationClient
 
                 throw new DestinationConnectionException(se.Message, (HttpStatusCode)se.Status);
             }
-            catch (AggregateException ex) when (ex.InnerExceptions[0] is RequestFailedException)
+            catch (AggregateException ex)
             {
-                // The blob container has added a 6 attempt retry that creates an aggregate exception if it can't find the blob.
-                var innerException = (RequestFailedException)ex.InnerExceptions[0];
+                Exception innerException = ex.InnerExceptions.FirstOrDefault() ?? ex;
 
-                // If storage account is not found
-                if (ex.InnerExceptions[0].Message.Contains("No such host is known", StringComparison.OrdinalIgnoreCase))
+                if (innerException.Message.Contains("No such host is known", StringComparison.OrdinalIgnoreCase))
                 {
                     _logger.LogWarning(ex, "The Storage account not found");
                     throw new DestinationConnectionException(Resources.StorageAccountNotFound, HttpStatusCode.NotFound);
                 }
-                else
+
+                if (innerException is RequestFailedException requestFailedException)
                 {
-                    _logger.LogWarning(innerException, "{Error}", innerException.Message);
-                    throw new DestinationConnectionException(innerException.Message, (HttpStatusCode)innerException.Status);
+                    _logger.LogWarning(requestFailedException, "{Error}", requestFailedException.Message);
+                    throw new DestinationConnectionException(requestFailedException.Message, (HttpStatusCode)requestFailedException.Status);
                 }
+
+                _logger.LogWarning(innerException, "Failed to create export container");
+                throw new DestinationConnectionException(innerException.Message, HttpStatusCode.BadRequest);
             }
             catch (AccessTokenProviderException ex)
             {
@@ -115,6 +118,11 @@ namespace Microsoft.Health.Fhir.Azure.ExportDestinationClient
                 // This indicates that Managed Identity isn't setup
                 _logger.LogWarning(ex, "Failed to get access token for export");
                 throw new DestinationConnectionException(Resources.CannotGetAccessToken, HttpStatusCode.Forbidden);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to create export container");
+                throw new DestinationConnectionException(ex.Message, HttpStatusCode.BadRequest);
             }
         }
 
@@ -177,6 +185,16 @@ namespace Microsoft.Health.Fhir.Azure.ExportDestinationClient
                         _logger.LogError(ex2, "Failed to write export file on retry");
                         throw new DestinationConnectionException(ex2.Message, (HttpStatusCode)ex2.Status);
                     }
+                    catch (Exception ex2)
+                    {
+                        _logger.LogError(ex2, "Failed to write export file on retry");
+                        throw new DestinationConnectionException(ex2.Message, HttpStatusCode.BadRequest);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to write export file");
+                    throw new DestinationConnectionException(ex.Message, HttpStatusCode.BadRequest);
                 }
             }
             else

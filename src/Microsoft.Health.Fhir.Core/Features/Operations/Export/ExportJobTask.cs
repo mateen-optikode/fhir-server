@@ -330,7 +330,8 @@ namespace Microsoft.Health.Fhir.Core.Features.Operations.Export
                 // Try to update the job to failed state.
                 _logger.LogError(ex, "[JobId:{JobId}] Encountered an unhandled exception. The job will be marked as failed.", _exportJobRecord.Id);
 
-                _exportJobRecord.FailureDetails = new JobFailureDetails(Core.Resources.UnknownError, HttpStatusCode.InternalServerError, string.Concat(ex.Message + "\n\r" + ex.StackTrace));
+                string failureReason = string.IsNullOrWhiteSpace(ex.Message) ? Core.Resources.UnknownError : ex.Message;
+                _exportJobRecord.FailureDetails = new JobFailureDetails(failureReason, HttpStatusCode.InternalServerError, string.Concat(ex.Message + "\n\r" + ex.StackTrace));
                 await CompleteJobAsync(OperationStatus.Failed, cancellationToken);
             }
             finally
@@ -384,7 +385,6 @@ namespace Microsoft.Health.Fhir.Core.Features.Operations.Export
             catch (Exception ex)
             {
                 _logger.LogCritical(ex, $"Unable to publish {nameof(ExportTaskMetricsNotification)}.");
-                throw;
             }
         }
 
