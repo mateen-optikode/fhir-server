@@ -107,7 +107,7 @@ namespace Microsoft.Extensions.DependencyInjection
                 return throttlingOptions;
             });
 
-            if (string.Equals(configurationRoot?["ASPNETCORE_FORWARDEDHEADERS_ENABLED"], "true", StringComparison.OrdinalIgnoreCase))
+            if (ShouldUseForwardedHeaders(configurationRoot))
             {
                 services.Configure<ForwardedHeadersOptions>(options =>
                 {
@@ -206,6 +206,12 @@ namespace Microsoft.Extensions.DependencyInjection
             services.TryAddSingleton<Health.JobManagement.IJobMetricFactory, JobMetricFactory>();
         }
 
+        private static bool ShouldUseForwardedHeaders(IConfiguration configuration)
+        {
+            return string.Equals(configuration["ASPNETCORE_FORWARDEDHEADERS_ENABLED"], "true", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(configuration["FhirServer:UseForwardedHeaders"], "true", StringComparison.OrdinalIgnoreCase);
+        }
+
         private class FhirServerBuilder : IFhirServerBuilder
         {
             public FhirServerBuilder(IServiceCollection services)
@@ -231,7 +237,7 @@ namespace Microsoft.Extensions.DependencyInjection
 
                     app.UseCors(Constants.DefaultCorsPolicy);
 
-                    if (string.Equals(config["ASPNETCORE_FORWARDEDHEADERS_ENABLED"], "true", StringComparison.OrdinalIgnoreCase))
+                    if (ShouldUseForwardedHeaders(config))
                     {
                         app.UseForwardedHeaders();
                     }
