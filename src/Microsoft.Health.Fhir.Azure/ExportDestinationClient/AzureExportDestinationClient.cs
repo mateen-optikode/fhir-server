@@ -37,6 +37,12 @@ namespace Microsoft.Health.Fhir.Azure.ExportDestinationClient
         private readonly ILogger _logger;
 
         private const int RetryDelaySeconds = 3;
+        private const string FhirNdjsonContentType = "application/fhir+ndjson";
+
+        private static readonly BlobHttpHeaders NdjsonBlobHeaders = new BlobHttpHeaders
+        {
+            ContentType = FhirNdjsonContentType,
+        };
 
         public AzureExportDestinationClient(
             IExportClientInitializer<BlobServiceClient> exportClientInitializer,
@@ -227,6 +233,15 @@ namespace Microsoft.Health.Fhir.Azure.ExportDestinationClient
             blobWriter.StreamWriter.Flush();
             blobWriter.StreamWriter.Close();
 
+            try
+            {
+                blobWriter.BlobClient.SetHttpHeaders(NdjsonBlobHeaders);
+            }
+            catch (RequestFailedException ex)
+            {
+                _logger.LogWarning(ex, "Unable to set export blob Content-Type to application/fhir+ndjson");
+            }
+
             return MakeDownloadableBlobUri(blobWriter.BlobClient);
         }
 
@@ -357,7 +372,10 @@ namespace Microsoft.Health.Fhir.Azure.ExportDestinationClient
             {
                 BlobClient = blockBlob;
                 BlobUri = blockBlob.Uri;
-                Stream = blockBlob.OpenWrite(true);
+                Stream = blockBlob.OpenWrite(true, new BlockBlobOpenWriteOptions
+                {
+                    HttpHeaders = NdjsonBlobHeaders,
+                });
                 StreamWriter = new StreamWriter(Stream);
             }
 
