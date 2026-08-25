@@ -81,6 +81,17 @@ namespace Microsoft.Health.Fhir.Azure.ExportDestinationClient
                     ? PublicAccessType.Blob
                     : PublicAccessType.None;
                 await _blobContainer.CreateIfNotExistsAsync(publicAccess, cancellationToken: cancellationToken);
+
+                // CreateIfNotExists does not change ACL on an existing container. Inferno downloads
+                // with requiresAccessToken=false, so public blob reads must be enforced each connect.
+                if (_exportJobConfiguration.EnablePublicBlobAccess)
+                {
+                    BlobContainerProperties properties = await _blobContainer.GetPropertiesAsync(cancellationToken: cancellationToken);
+                    if (properties.PublicAccess != PublicAccessType.Blob)
+                    {
+                        await _blobContainer.SetAccessPolicyAsync(PublicAccessType.Blob, cancellationToken: cancellationToken);
+                    }
+                }
             }
             catch (RequestFailedException se)
             {
