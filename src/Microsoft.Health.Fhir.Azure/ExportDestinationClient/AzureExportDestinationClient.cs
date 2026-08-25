@@ -11,9 +11,11 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure;
+using Azure.Storage;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Blobs.Specialized;
+using Azure.Storage.Sas;
 using EnsureThat;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -225,7 +227,101 @@ namespace Microsoft.Health.Fhir.Azure.ExportDestinationClient
             blobWriter.StreamWriter.Flush();
             blobWriter.StreamWriter.Close();
 
-            return RewritePublicBlobUri(blobWriter.BlobUri);
+            return MakeDownloadableBlobUri(blobWriter.BlobClient);
+        }
+
+        /// <summary>
+        /// Build a download URL for Inferno. Prefer a long-lived read SAS (works even when Azurite
+        /// public ACL / nginx Host quirks block anonymous GETs), then rewrite host to
+        /// <see cref="ExportJobConfiguration.StorageAccountPublicUri"/>.
+        /// </summary>
+        private Uri MakeDownloadableBlobUri(BlockBlobClient blobClient)
+        {
+            EnsureArg.IsNotNull(blobClient, nameof(blobClient));
+
+            Uri downloadUri = blobClient.Uri;
+
+            if (TryCreateReadSasUri(blobClient, out Uri sasUri))
+            {
+                downloadUri = sasUri;
+            }
+
+            return RewritePublicBlobUri(downloadUri);
+        }
+
+        private bool TryCreateReadSasUri(BlockBlobClient blobClient, out Uri sasUri)
+        {
+            sasUri = null;
+
+            if (!TryGetSharedKeyCredential(out StorageSharedKeyCredential credential))
+            {
+                return false;
+            }
+
+            try
+            {
+                var sasBuilder = new BlobSasBuilder
+                {
+                    BlobContainerName = blobClient.BlobContainerName,
+                    BlobName = blobClient.Name,
+                    Resource = "b",
+                    StartsOn = DateTimeOffset.UtcNow.AddMinutes(-5),
+                    ExpiresOn = DateTimeOffset.UtcNow.AddDays(7),
+                };
+                sasBuilder.SetPermissions(BlobSasPermissions.Read);
+
+                UriBuilder sasUriBuilder = new UriBuilder(blobClient.Uri)
+                {
+                    Query = sasBuilder.ToSasQueryParameters(credential).ToString(),
+                };
+                sasUri = sasUriBuilder.Uri;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Unable to create export blob SAS; falling back to unsigned URL");
+                return false;
+            }
+        }
+
+        private bool TryGetSharedKeyCredential(out StorageSharedKeyCredential credential)
+        {
+            credential = null;
+            string connection = _exportJobConfiguration.StorageAccountConnection;
+            if (string.IsNullOrWhiteSpace(connection))
+            {
+                return false;
+            }
+
+            string accountName = null;
+            string accountKey = null;
+            foreach (string part in connection.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                int eq = part.IndexOf('=', StringComparison.Ordinal);
+                if (eq <= 0)
+                {
+                    continue;
+                }
+
+                string key = part.Substring(0, eq);
+                string value = part.Substring(eq + 1);
+                if (key.Equals("AccountName", StringComparison.OrdinalIgnoreCase))
+                {
+                    accountName = value;
+                }
+                else if (key.Equals("AccountKey", StringComparison.OrdinalIgnoreCase))
+                {
+                    accountKey = value;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(accountName) || string.IsNullOrWhiteSpace(accountKey))
+            {
+                return false;
+            }
+
+            credential = new StorageSharedKeyCredential(accountName, accountKey);
+            return true;
         }
 
         private Uri RewritePublicBlobUri(Uri blobUri)
@@ -259,10 +355,13 @@ namespace Microsoft.Health.Fhir.Azure.ExportDestinationClient
         {
             public BlobStreamWriter(BlockBlobClient blockBlob)
             {
+                BlobClient = blockBlob;
                 BlobUri = blockBlob.Uri;
                 Stream = blockBlob.OpenWrite(true);
                 StreamWriter = new StreamWriter(Stream);
             }
+
+            public BlockBlobClient BlobClient { get; private set; }
 
             public Stream Stream { get; private set;  }
 
