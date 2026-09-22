@@ -72,6 +72,8 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="all" IncludeAssets="Runtime;Build;Native;contentFiles;Analyzers" />
+    <!-- GHSA-23fw-v26w-5fgq: pin the patched tasks package over the vulnerable 8.0.0 transitive reference. -->
+    <PackageReference Include="Microsoft.Build.Tasks.Git" PrivateAssets="all" IncludeAssets="Runtime;Build;Native;contentFiles;Analyzers" />
     <PackageReference Include="DotNet.ReproducibleBuilds" PrivateAssets="all" IncludeAssets="Runtime;Build;Native;contentFiles;Analyzers" />
     <PackageReference Include="StyleCop.Analyzers" PrivateAssets="all" IncludeAssets="Runtime;Build;Native;contentFiles;Analyzers" />
     <AdditionalFiles Include="$(MSBuildThisFileDirectory)/stylecop.json" Link="stylecop.json" />

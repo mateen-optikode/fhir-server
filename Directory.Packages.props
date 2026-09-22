@@ -36,6 +36,8 @@
     <PackageVersion Include="Microsoft.AspNetCore.Http" Version="2.2.2" />
     <!-- CVE-2022-26907 -->
     <PackageVersion Include="Microsoft.Rest.ClientRuntime" Version="2.3.24" />
+    <!-- GHSA-23fw-v26w-5fgq / CVE-2026-62900, pulled in via Microsoft.SourceLink.GitHub -->
+    <PackageVersion Include="Microsoft.Build.Tasks.Git" Version="10.0.303" />
   </ItemGroup>
   <ItemGroup>
     <PackageVersion Include="AngleSharp" Version="1.5.0" />
@@ -113,7 +115,7 @@
     <PackageVersion Include="Microsoft.Identity.Web" Version="2.13.3" />
     <PackageVersion Include="Microsoft.IO.RecyclableMemoryStream" Version="3.0.1" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
-    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="8.0.0" />
+    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.303" />
     <PackageVersion Include="Microsoft.SqlServer.DACFx" Version="162.5.57" />
     <PackageVersion Include="Microsoft.SqlServer.SqlManagementObjects" Version="172.64.0" />
     <PackageVersion Include="Newtonsoft.Json.Schema" Version="4.0.1" />
