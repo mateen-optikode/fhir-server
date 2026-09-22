@@ -15,9 +15,9 @@ namespace Microsoft.Health.Fhir.Core.Features.Security
         public const string SmartOAuthUriExtension = "http://fhir-registry.smarthealthit.org/StructureDefinition/oauth-uris";
         public const string SmartOAuthUriExtensionToken = "token";
         public const string SmartOAuthUriExtensionAuthorize = "authorize";
-        public const string SmartOAuthUriExtensionIntrospection = "introspection";
-        public const string SmartOAuthUriExtensionManagement = "management";
-        public const string SmartOAuthUriExtensionRevocation = "revocation";
+        public const string SmartOAuthUriExtensionIntrospection = "introspect";
+        public const string SmartOAuthUriExtensionManagement = "manage";
+        public const string SmartOAuthUriExtensionRevocation = "revoke";
 
         public const string SmartCapabilitiesUriExtension = "http://hl7.org/fhir/smart-app-launch/StructureDefinition/capabilities";
         public const string ExtensionPropertyName = "extension";
