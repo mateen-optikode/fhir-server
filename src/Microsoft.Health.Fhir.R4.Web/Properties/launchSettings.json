@@ -27,7 +27,7 @@
             "SqlServer:AllowDatabaseCreation": "true",
             "SqlServer:SchemaOptions:AutomaticUpdatesEnabled": "true",
             "TestAuthEnvironment:FilePath": "..//..//testauthenvironment.json",
-            "SqlServer:ConnectionString": "Server=optikode.com; Database=Aethiva_FHIR_R4; User Id=opti; Password=Op7!k0de@12#; TrustServerCertificate=True",
+            "SqlServer:ConnectionString": "Server=optikode.com; Database=AethivaFHIR; User Id=opti; Password=Op7!k0de@12#; TrustServerCertificate=True",
             "DataStore": "SqlServer",
             "TaskHosting:Enabled": "true",
             "TaskHosting:MaxRunningTaskCount": "2",
